@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>k-sound · 用我的声音唱歌</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%236366F1'/%3E%3Cpath d='M9 18V5l12-2v13' stroke='%23fff' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0A0A14; --bg2:#0E0E1C;
+    --card:#15141F; --card2:#1D1C2B; --card3:#262437;
+    --fg:#F2F2F8; --muted:#9C9AB3; --muted2:#6B687F;
+    --indigo:#6366F1; --violet:#8B5CF6; --fuchsia:#D946EF;
+    --accent:#22C55E; --danger:#EF4444;
+    --border:rgba(148,150,180,.10); --borderH:rgba(139,92,246,.45);
+    --grad:linear-gradient(135deg,#6366F1,#8B5CF6 55%,#D946EF);
+    --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",
+      "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--fg);line-height:1.6;min-height:100vh;
+    background-image:
+      radial-gradient(900px 420px at 18% -180px, rgba(99,102,241,.16), transparent 65%),
+      radial-gradient(700px 380px at 85% -140px, rgba(217,70,239,.10), transparent 65%);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:44px 24px 48px}
+
+  /* ---------- 通用 ---------- */
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:0 8px 32px rgba(0,0,0,.35)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:11px;
+    font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;border:none;
+    transition:all .18s ease;font-family:inherit;color:var(--fg)}
+  .btn svg{width:15px;height:15px}
+  .btn.primary{background:var(--grad);color:#fff;box-shadow:0 4px 18px rgba(99,102,241,.35)}
+  .btn.primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(99,102,241,.5)}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid rgba(148,150,180,.22)}
+  .btn.ghost:hover{color:var(--fg);border-color:var(--borderH)}
+  .btn:disabled{opacity:.32;cursor:not-allowed;transform:none!important;box-shadow:none}
+  :focus-visible{outline:2px solid #818CF8;outline-offset:2px;border-radius:8px}
+  .hidden{display:none!important}
+
+  /* ---------- header ---------- */
+  header{margin-bottom:30px;position:relative}
+  .brand{display:flex;align-items:center;gap:16px}
+  .vinyl{width:52px;height:52px;border-radius:50%;flex:none;position:relative;
+    border:1px solid rgba(148,150,180,.28);
+    background:repeating-radial-gradient(circle at 50% 50%, #1B1A2E 0 2px, #12111F 2px 4px);
+    transition:transform .6s ease}
+  .vinyl::after{content:"";position:absolute;inset:34%;border-radius:50%;
+    background:var(--grad);box-shadow:0 0 12px rgba(139,92,246,.55)}
+  body.busy .vinyl{animation:spin 5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  h1{font-size:27px;font-weight:800;letter-spacing:-.02em}
+  h1 em{font-style:normal;background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:13.5px;margin-top:6px}
+  .sub .dot{margin:0 8px;color:var(--muted2)}
+  .wave{margin-top:18px;display:block;width:100%;height:34px;opacity:.5}
+
+  /* ---------- 上传 ---------- */
+  .uploads{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:640px){.uploads{grid-template-columns:1fr}}
+  .upcard{padding:20px;display:flex;flex-direction:column;gap:12px}
+  .tag{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+  .tag b{color:var(--fg);font-size:15px;font-weight:700}
+  .tag svg{width:16px;height:16px;color:var(--violet)}
+  .drop{border:1.5px dashed rgba(148,150,180,.30);border-radius:13px;
+    padding:24px 14px;text-align:center;cursor:pointer;transition:all .18s ease;outline:none}
+  .drop:hover,.drop:focus-visible,.drop.dragover{
+    border-color:var(--borderH);background:rgba(99,102,241,.07)}
+  .drop svg{width:26px;height:26px;stroke:var(--muted);margin-bottom:6px}
+  .drop .t1{font-size:14px}
+  .drop .t2{font-size:12px;color:var(--muted2);margin-top:2px}
+  .hint{font-size:12px;color:var(--muted2)}
+  .fileinfo{display:none;align-items:center;gap:10px;background:var(--card3);
+    border-radius:10px;padding:10px 12px}
+  .fileinfo.show{display:flex}
+  .fileinfo svg{width:18px;height:18px;stroke:var(--accent);flex:none}
+  .fileinfo .name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fileinfo .meta{font-size:12px;color:var(--muted2);margin-left:auto;flex:none;
+    font-variant-numeric:tabular-nums}
+  .fileinfo button{background:none;border:none;color:var(--muted2);cursor:pointer;
+    font-size:16px;padding:2px 4px;line-height:1;border-radius:6px}
+  .fileinfo button:hover{color:var(--danger)}
+
+  /* ---------- 授权 + 设置 ---------- */
+  .controls{display:flex;align-items:center;gap:14px;margin:24px 0 16px;flex-wrap:wrap}
+  .auth{display:flex;align-items:center;gap:10px;flex:1;min-width:280px;
+    font-size:13.5px;color:var(--muted);cursor:pointer;user-select:none}
+  .auth:hover{color:var(--fg)}
+  .auth input{width:17px;height:17px;accent-color:var(--indigo);cursor:pointer;flex:none}
+  .setbtn{display:inline-flex;align-items:center;gap:8px;background:var(--card2);
+    border:1px solid var(--border);border-radius:11px;padding:9px 15px;cursor:pointer;
+    color:var(--muted);font-size:13px;font-weight:500;transition:all .18s;font-family:inherit}
+  .setbtn svg{width:15px;height:15px}
+  .setbtn:hover{color:var(--fg);border-color:var(--borderH)}
+  .setbtn .q{color:var(--violet);font-weight:600}
+
+  /* ---------- 生成按钮 ---------- */
+  .go{width:100%;padding:17px;border:none;border-radius:15px;cursor:pointer;
+    font-size:17px;font-weight:700;letter-spacing:6px;text-indent:6px;
+    color:#fff;background:var(--grad);
+    box-shadow:0 8px 28px rgba(99,102,241,.4);transition:all .18s ease;font-family:inherit}
+  .go:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 34px rgba(99,102,241,.55)}
+  .go:disabled{opacity:.3;cursor:not-allowed;box-shadow:none}
+  .go-tip{font-size:12.5px;color:var(--muted2);text-align:center;margin-top:10px;min-height:18px}
+
+  /* ---------- 进度 ---------- */
+  .status{display:none;margin-top:32px;padding:22px 24px}
+  .status.show{display:block}
+  .stepper{display:flex;margin-bottom:4px}
+  .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative}
+  .step .ball{width:40px;height:40px;border-radius:50%;background:var(--card3);
+    border:1.5px solid rgba(148,150,180,.22);display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:700;color:var(--muted);transition:all .25s ease}
+  .step .lbl{font-size:13px;color:var(--muted2)}
+  .step:not(:last-child)::after{content:"";position:absolute;top:20px;left:calc(50% + 28px);
+    width:calc(100% - 56px);height:1.5px;background:rgba(148,150,180,.18)}
+  .step.active .ball{background:var(--grad);border-color:transparent;color:#fff;
+    box-shadow:0 0 0 4px rgba(99,102,241,.16),0 0 22px rgba(139,92,246,.55)}
+  .step.active .lbl{color:var(--fg);font-weight:600}
+  .step.done .ball{background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.5);color:var(--accent)}
+  .step.done .lbl{color:var(--muted)}
+  .ball .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
+    border-top-color:#fff;border-radius:50%;animation:spin .9s linear infinite}
+  .stage-detail{text-align:center;font-size:13.5px;color:var(--muted);min-height:22px;margin-top:14px;
+    font-variant-numeric:tabular-nums}
+  .stage-detail .q{color:#A5B4FC}
+  .errbox{display:none;margin-top:14px;background:rgba(239,68,68,.08);
+    border:1px solid rgba(239,68,68,.35);border-radius:12px;padding:14px 16px;font-size:13.5px;color:#FCA5A5}
+  .errbox.show{display:block}
+  .errbox b{color:#F87171}
+
+  /* ---------- 结果卡片 ---------- */
+  .result{display:none;margin-top:26px;padding:24px;
+    border-color:rgba(34,197,94,.28)}
+  .result.show{display:block}
+  .rhead{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+  .rhead svg{width:19px;height:19px;stroke:var(--accent);flex:none}
+  .rname{font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    max-width:46%}
+  .badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;flex:none;
+    background:rgba(139,92,246,.15);color:#C4B5FD;border:1px solid rgba(139,92,246,.3)}
+  .rmeta{font-size:12.5px;color:var(--muted2);margin-left:auto;flex:none;font-variant-numeric:tabular-nums}
+
+  /* 统计 chips */
+  .chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;
+    margin:16px 0 14px}
+  .chip{background:var(--card2);border-radius:11px;padding:10px 6px;text-align:center}
+  .chip .v{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .chip .k{font-size:11px;color:var(--muted2);margin-top:3px}
+  .stages{font-size:12px;color:var(--muted2);margin:-6px 0 16px;text-align:center;line-height:1.8;
+    font-variant-numeric:tabular-nums}
+
+  /* 对比播放器 */
+  .playerbox{background:var(--card2);border-radius:14px;padding:14px;margin-bottom:16px}
+  .srcbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .src{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;
+    background:var(--card3);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid transparent;transition:all .18s ease;font-family:inherit}
+  .src:hover{color:var(--fg)}
+  .src.on{background:var(--grad);color:#fff;box-shadow:0 3px 14px rgba(99,102,241,.4)}
+  .src.off{opacity:.3;cursor:not-allowed}
+  .src .eq{display:none}
+  .src.on .eq{display:inline-flex}
+  .eq{display:inline-flex;gap:2px;align-items:flex-end;height:11px;width:14px}
+  .eq i{width:3px;border-radius:1px;background:currentColor;animation:eq 1s ease-in-out infinite}
+  .eq i:nth-child(1){height:60%;animation-delay:-.9s}
+  .eq i:nth-child(2){height:100%;animation-delay:-.4s}
+  .eq i:nth-child(3){height:45%;animation-delay:-.7s}
+  @keyframes eq{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+  audio{width:100%;height:46px}
+  .srchint{font-size:11.5px;color:var(--muted2);text-align:center;margin-top:9px}
+
+  .rbtns{display:flex;gap:11px;flex-wrap:wrap}
+
+  /* ---------- 历史（批次卡片） ---------- */
+  .history{margin-top:30px;padding:22px 24px}
+  .hhead{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .hhead h2{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .hhead h2 svg{width:17px;height:17px;color:var(--violet)}
+  .hcount{font-size:12px;color:var(--muted2);font-variant-numeric:tabular-nums}
+  .hrefresh{margin-left:auto;background:none;border:none;color:var(--muted2);cursor:pointer;
+    padding:4px;border-radius:8px;display:flex}
+  .hrefresh:hover{color:var(--fg)}
+  .hrefresh svg{width:15px;height:15px}
+  .hempty{font-size:13px;color:var(--muted2);text-align:center;padding:22px 0 12px}
+  .bcard{background:var(--card2);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;margin-bottom:14px;transition:border-color .18s}
+  .bcard:hover{border-color:var(--borderH)}
+  .bcard.gone{opacity:.5}
+  .bhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .bname{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    max-width:52%}
+  .bbadge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;flex:none;
+    background:rgba(139,92,246,.15);color:#C4B5FD;border:1px solid rgba(139,92,246,.3)}
+  .bdate{font-size:12px;color:var(--muted2);margin-left:auto;flex:none;font-variant-numeric:tabular-nums}
+  .bsub{font-size:12px;color:var(--muted2);margin-bottom:10px}
+  .bsub .bn{color:var(--muted);font-variant-numeric:tabular-nums}
+  .bsrcs{display:flex;gap:8px;margin:10px 0 8px;flex-wrap:wrap}
+  .bsrc{display:inline-flex;align-items:center;gap:8px;padding:7px 15px;border-radius:99px;
+    background:var(--card3);color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;
+    border:1px solid transparent;transition:all .18s ease;font-family:inherit}
+  .bsrc:hover{color:var(--fg)}
+  .bsrc.on{background:var(--grad);color:#fff;box-shadow:0 3px 12px rgba(99,102,241,.4)}
+  .bsrc.off{opacity:.3;cursor:not-allowed}
+  .bsrc .eq{display:none}
+  .bsrc.on .eq{display:inline-flex}
+  .bcard audio{width:100%;height:40px}
+  .bacts{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+  .hpager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px}
+  .hpinfo{font-size:12px;color:var(--muted2);font-variant-numeric:tabular-nums}
+  .hmore{display:inline-flex;align-items:center;gap:7px;padding:9px 20px;border-radius:11px;
+    background:var(--card2);border:1px solid var(--border);color:var(--muted);cursor:pointer;
+    font-size:13px;font-weight:600;transition:all .18s;font-family:inherit}
+  .hmore:hover{color:var(--fg);border-color:var(--borderH)}
+  .hmore:disabled{opacity:.35;cursor:not-allowed}
+
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--border);
+    font-size:12px;color:var(--muted2);text-align:center;line-height:1.9}
+
+  /* ---------- 弹窗 ---------- */
+  .mask{position:fixed;inset:0;background:rgba(5,5,14,.74);backdrop-filter:blur(5px);
+    display:flex;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .modal{background:var(--card);border:1px solid var(--borderH);border-radius:20px;
+    max-width:480px;width:100%;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.55);
+    max-height:88vh;overflow:auto}
+  .modal h2{font-size:18px;margin-bottom:16px}
+  .modal p{font-size:13.5px;color:var(--muted);margin-bottom:10px}
+  .agree{display:flex;gap:10px;align-items:flex-start;margin:18px 0;font-size:13.5px;cursor:pointer}
+  .agree input{width:17px;height:17px;margin-top:2px;accent-color:var(--indigo);flex:none}
+  .mbtns{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+
+  /* 设置弹窗控件 */
+  .qcards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:6px 0 4px}
+  @media(max-width:520px){.qcards{grid-template-columns:1fr}}
+  .qcard{border:1.5px solid var(--border);border-radius:13px;padding:12px 10px;cursor:pointer;
+    text-align:center;transition:all .18s ease;background:var(--card2)}
+  .qcard:hover{border-color:var(--borderH)}
+  .qcard input{position:absolute;opacity:0;pointer-events:none}
+  .qcard .ql{font-size:14px;font-weight:700}
+  .qcard .qd{font-size:11px;color:var(--muted2);margin-top:4px;line-height:1.5}
+  .qcard.on{border-color:var(--violet);background:rgba(99,102,241,.12);
+    box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .qcard.on .ql{background:var(--grad);-webkit-background-clip:text;background-clip:text;
+    color:transparent}
+  .flabel{display:flex;justify-content:space-between;align-items:center;font-size:13px;
+    color:var(--muted);margin:18px 0 8px}
+  .flabel b{color:var(--fg);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--violet);height:26px;cursor:pointer}
+  .switch{display:flex;gap:10px;align-items:flex-start;margin:18px 0 4px;font-size:13.5px;
+    cursor:pointer;color:var(--muted)}
+  .switch input{width:17px;height:17px;margin-top:2px;accent-color:var(--violet);flex:none}
+  .modelinfo{background:var(--card2);border-radius:12px;padding:14px 16px;margin-top:18px;
+    font-size:12.5px;color:var(--muted);line-height:2}
+  .modelinfo b{color:#C4B5FD;font-weight:600}
+
+  /* toast */
+  #toast{position:fixed;bottom:28px;left:50%;transform:translate(-50%,16px);opacity:0;
+    background:var(--card3);border:1px solid var(--borderH);color:var(--fg);
+    padding:11px 20px;border-radius:12px;font-size:13.5px;z-index:60;pointer-events:none;
+    transition:all .25s ease;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="vinyl" aria-hidden="true"></div>
+      <div>
+        <h1>k-sound <em>· 用我的声音唱歌</em></h1>
+        <p class="sub">上传一段本人干声和一首歌，生成用你的音色演唱的翻唱成品
+          <span class="dot">|</span>本机本地推理<span class="dot">|</span>约 2–5 分钟</p>
+      </div>
+    </div>
+    <svg class="wave" viewBox="0 0 880 34" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="wg" x1="0" x2="1">
+        <stop offset="0" stop-color="#6366F1" stop-opacity="0"/><stop offset=".5" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D946EF" stop-opacity="0"/>
+      </linearGradient></defs>
+      <g fill="url(#wg)">
+        <rect x="10" y="14" width="4" height="6" rx="2"/><rect x="24" y="8" width="4" height="18" rx="2"/>
+        <rect x="38" y="12" width="4" height="10" rx="2"/><rect x="52" y="4" width="4" height="26" rx="2"/>
+        <rect x="66" y="10" width="4" height="14" rx="2"/><rect x="80" y="16" width="4" height="4" rx="2"/>
+        <rect x="94" y="6" width="4" height="22" rx="2"/><rect x="108" y="12" width="4" height="10" rx="2"/>
+        <rect x="130" y="10" width="4" height="14" rx="2"/><rect x="144" y="2" width="4" height="30" rx="2"/>
+        <rect x="158" y="12" width="4" height="10" rx="2"/><rect x="172" y="8" width="4" height="18" rx="2"/>
+        <rect x="186" y="14" width="4" height="6" rx="2"/><rect x="200" y="5" width="4" height="24" rx="2"/>
+        <rect x="214" y="11" width="4" height="12" rx="2"/><rect x="236" y="9" width="4" height="16" rx="2"/>
+        <rect x="250" y="13" width="4" height="8" rx="2"/><rect x="264" y="3" width="4" height="28" rx="2"/>
+        <rect x="278" y="12" width="4" height="10" rx="2"/><rect x="292" y="7" width="4" height="20" rx="2"/>
+        <rect x="306" y="14" width="4" height="6" rx="2"/><rect x="320" y="10" width="4" height="14" rx="2"/>
+        <rect x="342" y="8" width="4" height="18" rx="2"/><rect x="356" y="12" width="4" height="10" rx="2"/>
+        <rect x="370" y="4" width="4" height="26" rx="2"/><rect x="384" y="11" width="4" height="12" rx="2"/>
+        <rect x="398" y="15" width="4" height="4" rx="2"/><rect x="412" y="9" width="4" height="16" rx="2"/>
+        <rect x="426" y="6" width="4" height="22" rx="2"/><rect x="440" y="13" width="4" height="8" rx="2"/>
+        <rect x="454" y="10" width="4" height="14" rx="2"/><rect x="468" y="5" width="4" height="24" rx="2"/>
+        <rect x="482" y="12" width="4" height="10" rx="2"/><rect x="496" y="8" width="4" height="18" rx="2"/>
+        <rect x="510" y="14" width="4" height="6" rx="2"/><rect x="524" y="9" width="4" height="16" rx="2"/>
+        <rect x="546" y="11" width="4" height="12" rx="2"/><rect x="560" y="4" width="4" height="26" rx="2"/>
+        <rect x="574" y="13" width="4" height="8" rx="2"/><rect x="588" y="7" width="4" height="20" rx="2"/>
+        <rect x="602" y="12" width="4" height="10" rx="2"/><rect x="616" y="10" width="4" height="14" rx="2"/>
+        <rect x="630" y="5" width="4" height="24" rx="2"/><rect x="644" y="14" width="4" height="6" rx="2"/>
+        <rect x="658" y="9" width="4" height="16" rx="2"/><rect x="672" y="12" width="4" height="10" rx="2"/>
+        <rect x="686" y="6" width="4" height="22" rx="2"/><rect x="700" y="11" width="4" height="12" rx="2"/>
+        <rect x="714" y="13" width="4" height="8" rx="2"/><rect x="728" y="8" width="4" height="18" rx="2"/>
+        <rect x="742" y="10" width="4" height="14" rx="2"/><rect x="756" y="4" width="4" height="26" rx="2"/>
+        <rect x="770" y="12" width="4" height="10" rx="2"/><rect x="784" y="7" width="4" height="20" rx="2"/>
+        <rect x="798" y="13" width="4" height="8" rx="2"/><rect x="812" y="9" width="4" height="16" rx="2"/>
+        <rect x="826" y="11" width="4" height="12" rx="2"/><rect x="840" y="14" width="4" height="6" rx="2"/>
+        <rect x="854" y="8" width="4" height="18" rx="2"/><rect x="868" y="12" width="4" height="10" rx="2"/>
+      </g>
+    </svg>
+  </header>
+
+  <section class="uploads">
+    <div class="panel upcard">
+      <div class="tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        <b>① 我的音色</b>
+      </div>
+      <div class="drop" id="dropVoice" tabindex="0" role="button" aria-label="上传本人干声音频">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="t1">拖入或点击上传干声</div>
+        <div class="t2">wav / mp3 / m4a / flac</div>
+      </div>
+      <input type="file" id="fileVoice" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg" hidden>
+      <div class="fileinfo" id="infoVoice">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span class="name"></span><span class="meta"></span>
+        <button title="移除文件" aria-label="移除干声文件">×</button>
+      </div>
+      <p class="hint">建议 10–15 秒清唱干声（系统自动截取前 15 秒做音色参考，上传更长的完整版仅供试听）；单人、无伴奏、无混响；最长 5 分钟</p>
+    </div>
+
+    <div class="panel upcard">
+      <div class="tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <b>② 目标歌曲</b>
+      </div>
+      <div class="drop" id="dropSong" tabindex="0" role="button" aria-label="上传目标歌曲音频">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="t1">拖入或点击上传歌曲</div>
+        <div class="t2">mp3 / wav / m4a / flac</div>
+      </div>
+      <input type="file" id="fileSong" accept=".wav,.mp3,.m4a,.flac,.aac,.ogg" hidden>
+      <div class="fileinfo" id="infoSong">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span class="name"></span><span class="meta"></span>
+        <button title="移除文件" aria-label="移除歌曲文件">×</button>
+      </div>
+      <p class="hint">支持录音室流行歌曲（单人主唱）；现场版 / 合唱 / 纯音乐效果不佳</p>
+    </div>
+  </section>
+
+  <div class="controls">
+    <label class="auth" id="authLabel">
+      <input type="checkbox" id="authCheck">
+      <span>我确认音色样本为<b>本人所有</b>，仅用于本地翻唱生成（不收集任何数据）</span>
+    </label>
+    <button class="setbtn" id="setBtn" aria-label="打开生成设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      生成设置 · <span class="q" id="setQLbl">标准</span>
+    </button>
+  </div>
+
+  <button class="go" id="goBtn" disabled>生成翻唱</button>
+  <div class="go-tip" id="goTip"></div>
+
+  <section class="panel status" id="statusBox" aria-live="polite">
+    <div class="stepper">
+      <div class="step" data-step="1"><div class="ball" aria-hidden="true">1</div><div class="lbl">分离人声</div></div>
+      <div class="step" data-step="2"><div class="ball" aria-hidden="true">2</div><div class="lbl">音色转换</div></div>
+      <div class="step" data-step="3"><div class="ball" aria-hidden="true">3</div><div class="lbl">混音导出</div></div>
+    </div>
+    <div class="stage-detail" id="stageDetail"></div>
+    <div class="errbox" id="errBox"><b>生成失败</b><span id="errMsg"></span></div>
+  </section>
+
+  <section class="panel result" id="resultBox">
+    <div class="rhead">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      <span class="rname" id="resName"></span>
+      <span class="badge" id="resBadge">标准</span>
+      <span class="rmeta" id="resMeta"></span>
+    </div>
+    <div class="chips" id="resStats"></div>
+    <div class="playerbox">
+      <div class="srcbar" id="srcBar" role="tablist" aria-label="对比试听音源">
+        <button class="src on" data-kind="cover" role="tab" aria-selected="true">翻唱
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
+        <button class="src" data-kind="song" role="tab" aria-selected="false">原唱
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
+        <button class="src" data-kind="voice" role="tab" aria-selected="false">我的干声
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
+      </div>
+      <audio id="resAudio" controls preload="metadata"></audio>
+      <div class="srchint">切换音源保持播放位置 · 干声仅作音色参考（时长较短）</div>
+    </div>
+    <div class="stages" id="resStages"></div>
+    <div class="rbtns">
+      <a class="btn primary" id="dlMp3" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载 MP3</a>
+      <a class="btn ghost" id="dlWav" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载 WAV（无损）</a>
+      <button class="btn ghost" id="regenBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        重新生成</button>
+    </div>
+  </section>
+
+  <section class="panel history" id="histBox">
+    <div class="hhead">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.7 3L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+        翻唱历史
+      </h2>
+      <span class="hcount" id="histCount"></span>
+      <button class="hrefresh" id="histRefresh" aria-label="刷新历史" title="刷新历史">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+    </div>
+      <div id="histRows"><div class="hempty">还没有翻唱记录，生成一次就会出现在这里</div></div>
+      <div class="hpager hidden" id="histPager">
+        <span class="hpinfo" id="histInfo"></span>
+        <button class="hmore" id="histMore">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg>
+          加载更多批次</button>
+      </div>
+  </section>
+
+  <footer>
+    仅限本人音色授权 · 本人音色授权 ≠ 歌曲词曲 / 录音版权，商用需另行取得授权<br>
+    成品文件名自动追加 _AI 标识 · 全流程本机推理，不上传音频数据
+  </footer>
+</div>
+
+<!-- 授权弹窗 -->
+<div class="mask hidden" id="authModal" role="dialog" aria-modal="true" aria-label="音色授权说明">
+  <div class="modal">
+    <h2>使用前确认</h2>
+    <p>本工具在你的本机上运行，翻唱生成全程<b>不联网、不上传</b>音频数据。</p>
+    <p>请确认上传的音色样本为<b>你本人</b>的声音。冒用他人音色可能涉及声音权与法律风险（已有相关判例）。</p>
+    <p>歌曲版权归属原权利人；生成的翻唱成品文件名会自动加 <b>_AI</b> 后缀，仅建议个人本地使用。</p>
+    <label class="agree">
+      <input type="checkbox" id="mAgree">
+      <span>我确认音色样本为本人所有，并同意仅用于本地翻唱生成</span>
+    </label>
+    <div class="mbtns"><button class="btn primary" id="mOk" disabled>同意并继续</button></div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="mask hidden" id="setModal" role="dialog" aria-modal="true" aria-label="生成设置">
+  <div class="modal">
+    <h2>生成设置</h2>
+    <div class="flabel" style="margin-top:0"><span>生成质量</span><span style="font-size:11px;color:var(--muted2)">质量越高越慢</span></div>
+    <div class="qcards" id="qCards"></div>
+    <div class="flabel"><span>音高微调（半音）</span><b id="pitchLbl">0 · 原调</b></div>
+    <input type="range" id="pitchRange" min="-12" max="12" step="1" value="0"
+      aria-label="音高微调，单位半音">
+    <label class="switch">
+      <input type="checkbox" id="autoF0">
+      <span>自动匹配我的音域（把音高拉向你干声的音域，可能改变原唱的音高走向）</span>
+    </label>
+    <div class="flabel"><span>人声混响湿度</span><b id="wetLbl">18% · 自然</b></div>
+    <input type="range" id="wetRange" min="0" max="0.3" step="0.01" value="0.18"
+      aria-label="人声混响湿度，百分比">
+    <p class="hint" style="margin:2px 0 0">0% 完全干声；过高会发空发飘。给 AI 人声补一点录音棚空间感，与伴奏更融合</p>
+    <div class="modelinfo" id="modelInfo"></div>
+    <div class="mbtns">
+      <button class="btn ghost" id="setCancel">取消</button>
+      <button class="btn primary" id="setSave">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const AUDIO_EXTS = ["wav","mp3","m4a","flac","aac","ogg"];
+const QUALITY_INFO = {
+  fast:    {label:"快速", desc:"20 步扩散<br>约 1.9× 实时"},
+  standard:{label:"标准", desc:"30 步扩散<br>约 1.3× 实时（推荐）"},
+  fine:    {label:"精细", desc:"45 步扩散<br>约 0.9× 实时"},
+};
+const STEPS2Q = {20:"fast", 30:"standard", 45:"fine"};
+
+const state = {
+  voiceFile: null, songFile: null,
+  jobId: null, pollTimer: null, submitting: false,
+  srcKind: "cover", srcFail: new Set(),
+  config: null,
+};
+
+/* ---------------- 工具 ---------------- */
+function fmtSize(n){ return n > 1048576 ? (n/1048576).toFixed(1)+" MB" : Math.round(n/1024)+" KB"; }
+function fmtDur(s){ const m = Math.floor(s/60), r = Math.round(s%60); return `${m}分${r<10?"0":""}${r}秒`; }
+function fmtDate(ts){ const d = new Date(ts*1000);
+  const p = n => (n<10?"0":"")+n;
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function tip(msg){ $("goTip").textContent = msg; setTimeout(()=>{ if ($("goTip").textContent === msg) $("goTip").textContent = ""; }, 4000); }
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(()=> t.classList.remove("show"), 2600); }
+
+/* ---------------- 授权 ---------------- */
+const AUTH_KEY = "ksound_auth_v1";
+function initAuth(){
+  const agreed = localStorage.getItem(AUTH_KEY) === "1";
+  $("authCheck").checked = agreed;
+  if (!agreed) showAuthModal();
+}
+function showAuthModal(){
+  $("authModal").classList.remove("hidden");
+  const ok = $("mOk"), agree = $("mAgree");
+  agree.onchange = () => { ok.disabled = !agree.checked; };
+  ok.onclick = () => {
+    localStorage.setItem(AUTH_KEY, "1");
+    $("authCheck").checked = true;
+    $("authModal").classList.add("hidden");
+    updateGo();
+  };
+}
+$("authCheck").addEventListener("change", e => {
+  if (e.target.checked) localStorage.setItem(AUTH_KEY, "1");
+  else localStorage.removeItem(AUTH_KEY);
+  updateGo();
+});
+
+/* ---------------- 上传 ---------------- */
+function bindDrop(dropEl, fileInput, infoBox, slot){
+  const setFile = f => {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    if (!AUDIO_EXTS.includes(ext)) { tip(`不支持的格式 .${ext}，请上传 wav / mp3 / m4a / flac`); return; }
+    state[slot] = f;
+    renderInfo(infoBox, f);
+    updateGo();
+  };
+  dropEl.addEventListener("click", () => fileInput.click());
+  dropEl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+  ["dragenter","dragover"].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add("dragover"); }));
+  ["dragleave","drop"].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove("dragover"); }));
+  dropEl.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) setFile(f); });
+  infoBox.querySelector("button").addEventListener("click", () => {
+    state[slot] = null; fileInput.value = "";
+    infoBox.classList.remove("show"); updateGo();
+  });
+}
+function renderInfo(infoBox, f){
+  infoBox.classList.add("show");
+  infoBox.querySelector(".name").textContent = f.name;
+  const meta = infoBox.querySelector(".meta");
+  meta.textContent = fmtSize(f.size);
+  readDuration(f).then(d => { if (d && isFinite(d)) meta.textContent = `${fmtSize(f.size)} · ${fmtDur(d)}`; });
+}
+function readDuration(file){
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("audio");
+    a.preload = "metadata";
+    a.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(a.duration); };
+    a.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    a.src = url;
+  });
+}
+bindDrop($("dropVoice"), $("fileVoice"), $("infoVoice"), "voiceFile");
+bindDrop($("dropSong"),   $("fileSong"),   $("infoSong"),   "songFile");
+
+/* ---------------- 生成按钮 ---------------- */
+function updateGo(){
+  const ready = state.voiceFile && state.songFile && $("authCheck").checked && !state.submitting;
+  $("goBtn").disabled = !ready;
+  if (state.submitting) { $("goTip").textContent = ""; return; }
+  if (!$("authCheck").checked) { $("goTip").textContent = "请先勾选本人音色授权"; return; }
+  if (!state.voiceFile || !state.songFile){
+    $("goTip").textContent = !state.voiceFile && !state.songFile ? "请上传干声与歌曲"
+      : !state.voiceFile ? "还缺「我的音色」干声" : "还缺「目标歌曲」";
+    return;
+  }
+  $("goTip").textContent = "";
+}
+$("goBtn").addEventListener("click", submit);
+
+async function submit(){
+  if (!state.voiceFile || !state.songFile) return;
+  if (!$("authCheck").checked) { tip("请先勾选本人音色授权"); return; }
+  state.submitting = true; updateGo();
+  $("goBtn").textContent = "正在提交…";
+  document.body.classList.add("busy");
+  resetStatusUI();
+  try {
+    const fd = new FormData();
+    fd.append("voice", state.voiceFile);
+    fd.append("song", state.songFile);
+    fd.append("authorized", "true");
+    const r = await fetch("/jobs", { method: "POST", body: fd });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ detail: `创建任务失败（HTTP ${r.status}）` }));
+      throw new Error(e.detail || "创建任务失败");
+    }
+    const data = await r.json();
+    state.jobId = data.job_id;
+    localStorage.setItem("ksound_last_job", data.job_id);
+    startPolling();
+  } catch (err) {
+    showError(String(err.message || err));
+    document.body.classList.remove("busy");
+  } finally {
+    state.submitting = false;
+    $("goBtn").textContent = "生成翻唱";
+    updateGo();
+  }
+}
+
+/* ---------------- 轮询 ---------------- */
+function startPolling(){
+  stopPolling();
+  $("statusBox").classList.add("show");
+  state.pollTimer = setInterval(pollOnce, 1000);
+  pollOnce();
+}
+function stopPolling(){ if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; } }
+
+async function pollOnce(){
+  if (!state.jobId) return;
+  let job;
+  try {
+    const r = await fetch(`/jobs/${state.jobId}`);
+    if (!r.ok) throw new Error("查询任务失败");
+    job = await r.json();
+  } catch (e) { return; }
+  renderJob(job);
+  if (job.status === "done" || job.status === "error"){
+    stopPolling();
+    document.body.classList.remove("busy");
+    if (job.status === "done") loadHistory();
+  }
+}
+
+/* ---------------- 状态渲染 ---------------- */
+const STEP_OF_STAGE = { preprocess: 1, demucs: 1, svc: 2, remix: 3 };
+function resetStatusUI(){
+  $("statusBox").classList.add("show");
+  $("errBox").classList.remove("show");
+  $("resultBox").classList.remove("show");
+  setSteps(0);
+  $("stageDetail").textContent = "";
+}
+function setSteps(current, allDone){
+  document.querySelectorAll(".step").forEach(el => {
+    const n = +el.dataset.step;
+    const ball = el.querySelector(".ball");
+    ball.innerHTML = "";
+    el.classList.remove("active","done");
+    if (allDone || (current && n < current)) { el.classList.add("done"); ball.textContent = "✓"; }
+    else if (current === n) { el.classList.add("active"); ball.innerHTML = '<div class="spin"></div>'; }
+    else ball.textContent = String(n);
+  });
+}
+function renderJob(job){
+  resetStatusUI();
+  if (job.status === "queued"){
+    setSteps(0);
+    const ahead = typeof job.queue_position === "number" ? Math.max(0, job.queue_position - 1) : 0;
+    $("stageDetail").innerHTML = `<span class="q">排队中</span>（前方还有 ${ahead} 个任务）`;
+    return;
+  }
+  if (job.status === "running"){
+    const step = STEP_OF_STAGE[job.stage] || 1;
+    setSteps(step);
+    $("stageDetail").textContent = `第 ${step} 步 · ${job.stage_label || ""}${job.detail ? " · " + job.detail : ""}`;
+    return;
+  }
+  if (job.status === "error"){
+    setSteps(0);
+    showError(job.error || "生成失败");
+    return;
+  }
+  if (job.status === "done") renderResult(job);
+}
+function showError(msg){
+  $("errMsg").textContent = "：" + msg;
+  $("errBox").classList.add("show");
+}
+
+/* ---------------- 结果卡片 ---------------- */
+function renderResult(job){
+  setSteps(0, true);
+  $("stageDetail").textContent = "生成完成，可以试听了";
+  const res = job.result || {}, stats = job.stats || {};
+  $("resName").textContent = res.filename || "成品";
+  $("resName").title = res.filename || "";
+  $("resMeta").textContent = res.duration ? `${fmtDur(res.duration)} · ${fmtSize(res.size_bytes||0)}` : "";
+  const q = STEPS2Q[stats.diffusion_steps] || "standard";
+  const qInfo = QUALITY_INFO[q];
+  let badge = qInfo ? qInfo.label : "标准";
+  if (job.settings_used && job.settings_used.pitch_shift)
+    badge += ` · ${job.settings_used.pitch_shift > 0 ? "+" : ""}${job.settings_used.pitch_shift}半音`;
+  const wetShown = stats.reverb_wet != null ? stats.reverb_wet
+    : (job.settings_used && job.settings_used.reverb_wet);
+  if (typeof wetShown === "number" && wetShown > 0)
+    badge += ` · 混响${Math.round(wetShown * 100)}%`;
+  $("resBadge").textContent = badge;
+
+  // 统计 chips
+  const cells = [];
+  if (stats.total_s) cells.push([fmtDur(stats.total_s), "总耗时"]);
+  if (typeof stats.speed_x === "number" && stats.speed_x > 0)
+    cells.push([stats.speed_x.toFixed(2) + "× 实时", "生成速度"]);
+  if (stats.peak_rss_gb != null) cells.push([stats.peak_rss_gb + " GB", "峰值内存 · 转换"]);
+  if (stats.demucs_peak_rss_gb != null) cells.push([stats.demucs_peak_rss_gb + " GB", "峰值内存 · 分离"]);
+  if (stats.mps_driver_gb != null) cells.push([stats.mps_driver_gb + " GB", "MPS 显存"]);
+  $("resStats").innerHTML = cells.map(([v, k]) =>
+    `<div class="chip"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+  // 分阶段明细
+  const t = stats.stage_times || {};
+  const names = [["preprocess","预处理"],["demucs","分离人声"],["svc","音色转换"],["remix","混音导出"]];
+  const parts = names.filter(([k]) => t[k] != null).map(([k, n]) => `${n} ${t[k]}s`);
+  if (parts.length){
+    if (t.svc != null && stats.model_load_s != null){
+      const i = parts.indexOf(`音色转换 ${t.svc}s`);
+      if (i >= 0) parts[i] = `音色转换 ${t.svc}s（含模型加载 ${stats.model_load_s}s）`;
+    }
+    $("resStages").textContent = parts.join(" · ");
+  }
+
+  const base = `/jobs/${job.job_id}`;
+  $("dlMp3").href = `${base}/result?fmt=mp3`;
+  $("dlWav").href = `${base}/result?fmt=wav`;
+
+  // 对比播放器
+  state.srcFail = new Set();
+  state.srcKind = "cover";
+  updateSrcTabs();
+  setAudioSource("cover", false);
+
+  $("resultBox").classList.add("show");
+  $("resultBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---------------- 对比播放器 ---------------- */
+function updateSrcTabs(){
+  document.querySelectorAll(".src").forEach(el => {
+    const kind = el.dataset.kind;
+    el.classList.toggle("on", kind === state.srcKind && !state.srcFail.has(kind));
+    el.classList.toggle("off", state.srcFail.has(kind));
+    el.setAttribute("aria-selected", kind === state.srcKind ? "true" : "false");
+    el.disabled = state.srcFail.has(kind);
+  });
+}
+function setAudioSource(kind, keepPos){
+  const a = $("resAudio");
+  const t = keepPos ? a.currentTime : 0;
+  const wasPlaying = keepPos && !a.paused;
+  a.src = `/jobs/${state.jobId}/audio/${kind}?r=${Date.now()}`;
+  a.addEventListener("loadedmetadata", () => {
+    a.currentTime = Math.min(t, a.duration || t);
+    if (wasPlaying) a.play().catch(() => {});
+  }, { once: true });
+}
+document.querySelectorAll(".src").forEach(el => {
+  el.addEventListener("click", () => {
+    const kind = el.dataset.kind;
+    if (state.srcFail.has(kind) || kind === state.srcKind || !state.jobId) return;
+    state.srcKind = kind;
+    updateSrcTabs();
+    setAudioSource(kind, true);
+  });
+});
+$("resAudio").addEventListener("error", () => {
+  const kind = state.srcKind;
+  if (!state.jobId) return;
+  state.srcFail.add(kind);
+  if (kind !== "cover"){
+    state.srcKind = "cover";
+    setAudioSource("cover", true);
+    toast("该音源已不可用（文件可能被清理）");
+  } else {
+    toast("成品音频加载失败");
+  }
+  updateSrcTabs();
+});
+
+/* ---------------- 重新生成 ---------------- */
+$("regenBtn").addEventListener("click", () => {
+  if (state.voiceFile && state.songFile) { submit(); return; }
+  tip("文件已清空（页面刷新后无法保留），请重新上传后点击「生成翻唱」");
+  document.querySelector(".uploads").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+/* ---------------- 翻唱历史（批次卡片 + 分页） ---------------- */
+const PAGE_SIZE = 10;
+let histLoaded = 0, histTotal = -1;
+
+async function loadHistory(reset){
+  if (reset){ histLoaded = 0; histTotal = -1; $("histRows").innerHTML = ""; }
+  const offset = histLoaded;
+  try {
+    const r = await fetch(`/history?offset=${offset}&limit=${PAGE_SIZE}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    histTotal = data.total ?? 0;
+    const items = data.items || [];
+    histLoaded += items.length;
+    renderHistory(items, reset);
+    $("histCount").textContent = histTotal ? `共 ${histTotal} 个批次` : "";
+    updatePager();
+  } catch (_) {}
+}
+function updatePager(){
+  const pager = $("histPager"), total = Math.max(histTotal, histLoaded);
+  pager.classList.toggle("hidden", histTotal <= PAGE_SIZE);
+  $("histInfo").textContent = `已显示 ${histLoaded} / ${total} 个批次`;
+  $("histMore").disabled = !histTotal || histLoaded >= histTotal;
+}
+
+function renderHistory(items, reset){
+  const rows = $("histRows");
+  if (reset) rows.innerHTML = "";
+  if (!histLoaded){
+    rows.innerHTML = '<div class="hempty">还没有翻唱记录，生成一次就会出现在这里</div>';
+    return;
+  }
+  rows.innerHTML = (reset ? "" : rows.innerHTML) + items.map(it => {
+    const st = it.stats || {};
+    const chips = [];
+    if (typeof st.speed_x === "number" && st.speed_x > 0) chips.push(`${st.speed_x.toFixed(2)}× 实时`);
+    if (st.total_s) chips.push(`总耗时 ${fmtDur(st.total_s)}`);
+    if (st.peak_rss_gb != null) chips.push(`峰值内存 ${st.peak_rss_gb}GB`);
+    if (it.duration) chips.push(`时长 ${fmtDur(it.duration)}`);
+    const chipHtml = chips.length
+      ? `<div class="bsub" style="margin-top:8px">${chips.map(c => `<span class="bn">${c}</span>`).join(" · ")}</div>` : "";
+    const q = STEPS2Q[it.diffusion_steps] || "standard";
+    let badge = it.pitch_shift ? ((it.pitch_shift > 0 ? "+" : "") + it.pitch_shift + "半音") : "";
+    if (typeof it.reverb_wet === "number" && it.reverb_wet > 0)
+      badge += (badge ? " · " : "") + `混响${Math.round(it.reverb_wet * 100)}%`;
+    const gone = !it.files.cover;
+    const srcBtn = k => {
+      const ok = it.files[k] && (k === "cover" || !gone);
+      const label = {cover:"翻唱", song:"原唱", voice:"我的干声"}[k];
+      return `<button class="bsrc${k === "cover" ? " on" : ""}${ok ? "" : " off"}" data-kind="${k}"
+        ${ok ? "" : "disabled"} aria-label="播放${label}">${label}
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>`;
+    };
+    const songName = esc(it.song_name || "未知歌曲");
+    return `<div class="bcard${gone ? " gone" : ""}" data-job="${it.job_id}">
+      <div class="bhead">
+        <span class="bname" title="${songName}">${songName}</span>
+        <span class="bbadge">${QUALITY_INFO[q] ? QUALITY_INFO[q].label : "标准"}${badge ? " · " + badge : ""}</span>
+        <span class="bdate">${fmtDate(it.created_at)}</span>
+      </div>
+      <div class="bsub">干声：${esc(it.voice_name || "-")}${gone ? ' · <span style="color:var(--muted2)">成品文件已清理</span>' : ""}</div>
+      ${chipHtml}
+      <div class="bsrcs">${srcBtn("cover")}${srcBtn("song")}${srcBtn("voice")}</div>
+      <audio preload="metadata" controls></audio>
+      <div class="bacts">
+        <a class="mini dl" href="/jobs/${it.job_id}/result?fmt=mp3" ${gone ? 'aria-disabled="true" onclick="return false"' : "download"}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>MP3</a>
+        <a class="mini dl" href="/jobs/${it.job_id}/result?fmt=wav" ${gone ? 'aria-disabled="true" onclick="return false"' : "download"}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>WAV</a>
+      </div>
+    </div>`;
+  }).join("");
+
+  // 批次卡片：三音源切换播放（保持进度），全局只允许一个卡片在播
+  rows.querySelectorAll(".bcard").forEach(card => {
+    const jobId = card.dataset.job;
+    const audio = card.querySelector("audio");
+    audio.addEventListener("play", () => {
+      document.querySelectorAll("audio").forEach(a => { if (a !== audio && !a.paused) a.pause(); });
+    });
+    card.querySelectorAll(".bsrc").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        const kind = btn.dataset.kind;
+        const cur = card.querySelector(".bsrc.on");
+        if (cur === btn) { audio.paused ? audio.play().catch(()=>{}) : audio.pause(); return; }
+        const t = audio.currentTime, wasPlaying = !audio.paused;
+        card.querySelectorAll(".bsrc").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-pressed","false"); });
+        btn.classList.add("on");
+        audio.src = `/jobs/${jobId}/audio/${kind}?r=${Date.now()}`;
+        audio.addEventListener("loadedmetadata", () => {
+          audio.currentTime = Math.min(t, audio.duration || t);
+          if (wasPlaying || t === 0) audio.play().catch(()=>{});
+        }, { once: true });
+      });
+    });
+  });
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+$("histMore").addEventListener("click", () => loadHistory(false));
+$("histRefresh").addEventListener("click", () => loadHistory(true));
+
+/* ---------------- 生成设置 ---------------- */
+async function loadConfig(){
+  try {
+    const r = await fetch("/api/config");
+    if (!r.ok) return;
+    const data = await r.json();
+    state.config = data.config;
+    state.modelInfo = data.model;
+    const q = QUALITY_INFO[data.config.quality];
+    $("setQLbl").textContent = q ? q.label : "标准";
+  } catch (_) {}
+}
+function openSettings(){
+  if (!state.config) return;
+  $("setModal").classList.remove("hidden");
+  // 质量卡片
+  $("qCards").innerHTML = Object.entries(QUALITY_INFO).map(([id, q]) => `
+    <label class="qcard" data-q="${id}">
+      <input type="radio" name="quality" value="${id}" ${state.config.quality === id ? "checked" : ""}>
+      <div class="ql">${q.label}</div>
+      <div class="qd">${q.desc}</div>
+    </label>`).join("");
+  document.querySelectorAll(".qcard input").forEach(inp => {
+    inp.addEventListener("change", syncQCards);
+  });
+  syncQCards();
+  // 音高
+  const p = state.config.pitch_shift || 0;
+  $("pitchRange").value = p;
+  syncPitchLbl(p);
+  $("autoF0").checked = !!state.config.auto_f0;
+  const wet = typeof state.config.reverb_wet === "number" ? state.config.reverb_wet : 0.18;
+  $("wetRange").value = wet;
+  syncWetLbl(wet);
+  // 模型信息
+  const m = state.modelInfo || {};
+  $("modelInfo").innerHTML =
+    `当前使用 <b>本地模型</b>（无需联网、不产生 API 费用）<br>` +
+    `转换引擎 <b>${esc(m.engine || "-")}</b><br>` +
+    `人声分离 <b>${esc(m.separator || "-")}</b><br>` +
+    `运行设备 <b>${esc(m.device || "-")}</b>`;
+}
+function syncQCards(){
+  document.querySelectorAll(".qcard").forEach(c =>
+    c.classList.toggle("on", c.querySelector("input").checked));
+}
+function syncPitchLbl(v){
+  $("pitchLbl").textContent = v === 0 ? "0 · 原调"
+    : `${v > 0 ? "+" : ""}${v} 半音${v > 0 ? "（升调）" : "（降调）"}`;
+}
+function wetDesc(v){
+  if (v === 0) return "干声";
+  if (v <= 0.10) return "极轻";
+  if (v <= 0.22) return "自然";
+  return "较浓";
+}
+function syncWetLbl(v){
+  $("wetLbl").textContent = `${Math.round(v * 100)}% · ${wetDesc(v)}`;
+}
+$("pitchRange").addEventListener("input", e => syncPitchLbl(+e.target.value));
+$("wetRange").addEventListener("input", e => syncWetLbl(+e.target.value));
+$("setBtn").addEventListener("click", openSettings);
+$("setCancel").addEventListener("click", () => $("setModal").classList.add("hidden"));
+$("setSave").addEventListener("click", async () => {
+  const quality = (document.querySelector('input[name="quality"]:checked') || {}).value || "standard";
+  const pitch = +$("pitchRange").value;
+  const autoF0 = $("autoF0").checked;
+  const wet = +$("wetRange").value;
+  try {
+    const r = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality, pitch_shift: pitch, auto_f0: autoF0, reverb_wet: wet }),
+    });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    state.config = data.config;
+    const q = QUALITY_INFO[data.config.quality];
+    $("setQLbl").textContent = q ? q.label : "标准";
+    $("setModal").classList.add("hidden");
+    toast(`设置已保存（${q ? q.label : "标准"}质量 · ${pitch === 0 ? "原调" : (pitch > 0 ? "+" : "") + pitch + "半音"} · 混响 ${Math.round(wet*100)}%）`);
+  } catch (_) { toast("保存失败，请重试"); }
+});
+
+/* ---------------- 初始化 ---------------- */
+async function restoreLast(){
+  const lastId = localStorage.getItem("ksound_last_job");
+  if (!lastId) return;
+  try {
+    const r = await fetch(`/jobs/${lastId}`);
+    if (!r.ok) { localStorage.removeItem("ksound_last_job"); return; }
+    const job = await r.json();
+    state.jobId = job.job_id;
+    if (job.status === "queued" || job.status === "running") { document.body.classList.add("busy"); startPolling(); }
+    else renderJob(job);
+  } catch (_) {}
+}
+
+initAuth();
+updateGo();
+loadConfig();
+loadHistory();
+restoreLast();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# 运行时 / 大体积目录
+.venv/
+checkpoints/
+jobs/
+.temp/
+__pycache__/
+# 第三方 SEED-VC 源码（101MB，vendored 不追踪）
+engine/seed-vc/
+engine/output/
+engine/work/
+
+# 个人数据：不推送到任何远程
+# （干声、版权歌曲、生成成品、历史数据库）
+/*.mp3
+/*.wav
+/*.m4a
+k-sound.db
+k-sound.db-shm
+k-sound.db-wal
+*.sqlite
+
+# 系统
+.DS_Store
