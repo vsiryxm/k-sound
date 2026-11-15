@@ -890,7 +890,13 @@ function renderHistory(items, reset){
         if (btn.disabled) return;
         const kind = btn.dataset.kind;
         const cur = card.querySelector(".bsrc.on");
-        if (cur === btn) { audio.paused ? audio.play().catch(()=>{}) : audio.pause(); return; }
+        if (cur === btn) {
+          if (!audio.getAttribute("src")) {
+            audio.src = `/jobs/${jobId}/audio/${kind}?r=${Date.now()}`;
+            audio.addEventListener("loadedmetadata", () => audio.play().catch(()=>{}), { once: true });
+          } else { audio.paused ? audio.play().catch(()=>{}) : audio.pause(); }
+          return;
+        }
         const t = audio.currentTime, wasPlaying = !audio.paused;
         card.querySelectorAll(".bsrc").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-pressed","false"); });
         btn.classList.add("on");
@@ -1010,7 +1016,7 @@ async function restoreLast(){
 initAuth();
 updateGo();
 loadConfig();
-loadHistory();
+loadHistory(true);
 restoreLast();
 </script>
 </body>

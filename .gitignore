@@ -21,3 +21,7 @@ k-sound.db-wal
 
 # 系统
 .DS_Store
+
+# 个人资料与竞品（不入库）
+竞品/
+*.exe
