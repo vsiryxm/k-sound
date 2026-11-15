@@ -428,31 +428,30 @@ def _worker() -> None:
 threading.Thread(target=_worker, daemon=True, name="ks-worker").start()
 
 
-def _process_vocal(vocal_st: np.ndarray, wet: float, gain: float = 0.90) -> np.ndarray:
-    """人声处理链（融合度优化 B 步）：把 AI 人声"坐进"伴奏声场。
+def _process_vocal(vocal_st: np.ndarray, wet: float, gain: float = 1.0) -> np.ndarray:
+    """人声处理链（融合度优化 B 步，2026-11-15 修正版）：把 AI 人声"坐进"伴奏声场。
 
-    链路：HP高通去泥 → 轻压缩控动态 → 混响(带pre-delay) → Haas 微展宽 → 增益
+    链路：HP高通去泥 → 轻压缩控动态(+makeup 补偿) → 混响 → Haas 微展宽 → 增益
     - wet=0 时跳过混响（其余链路保留）
+    - 压缩后按实测 RMS 差动态补 Gain，人声响度不因压缩而塌陷
+    - 人声/伴奏平衡由混音公式统一承担（vocal×1.0 + accomp×0.9 = -0.9dB），
+      链内不再叠 gain，避免双重降电平把人声埋进伴奏（原 0.90×0.85=-2.3dB 事故）
     - pedalboard 全本地 DSP，处理耗时 <1 秒
     """
     x = vocal_st.astype(np.float32)
     if x.ndim == 1:
         x = np.stack([x, x], axis=1)
-    board_plugins = [
-        HighpassFilter(cutoff_frequency_hz=90),        # 去低频泥，给人声清位
-        Compressor(threshold_db=-18, ratio=2.5, attack_ms=8, release_ms=160),
-        # 轻压缩：动态贴合乐队律动（压缩损失 ~0.6dB，统一在 gain 里补）
-    ]
+    # HP高通 → 混响。2026-11-15 定稿：移除压缩段（实测净损失 4.9dB 且频谱重心
+    # 下移、中频占比 11.5%→6.6%，咬字发糊；SEED-VC 输出已继承原唱录音室动态，
+    # 无需再压缩），保留 HP90（低频让位给编曲贝斯/鼓，人声"坐进"声场）。
+    hp = Pedalboard([HighpassFilter(cutoff_frequency_hz=90)])
+    out = hp(x, 44100)
     if wet > 0:
-        board_plugins.append(Reverb(room_size=0.45, damping=0.62, wet_level=wet,
-                                     dry_level=1.0, width=1.0, freeze_mode=0.0))
-    board = Pedalboard(board_plugins)
-    out = board(x, 44100)
-    # Haas 微展宽：右声道延迟 ~6ms，消除正中央点声源感（幅度控制在人耳定位阈内）
-    d = int(0.006 * 44100)
-    out = out.copy()
-    out[d:, 1] = out[:-d, 1] if len(out) > d else out[:, 1]
-    out[:d, 1] = 0
+        out = Pedalboard([Reverb(room_size=0.35, damping=0.6, wet_level=wet,
+                                  dry_level=1.0, width=1.0, freeze_mode=0.0)])(out, 44100)
+    # 2026-11-15 移除 Haas 延迟展宽：实测 6ms/3ms 对宽带人声侧/中比均 ~0.8
+    # （延迟信号与原信号高频不相关，缩短延迟无效），人声定位发虚；
+    # 融合感由混响空间感 + 电平平衡承担，人声恢复居中（M2 基线 0.25 侧/中比）。
     return out * gain
 
 
@@ -589,9 +588,10 @@ def _run_job(job) -> None:
         n = min(len(vocal), len(accomp))
         vocal_st = np.stack([vocal[:n], vocal[:n]], axis=1)
         vocal_st = _process_vocal(vocal_st, cfg["reverb_wet"])
-        # D 步（融合度优化第一步）：人声 -1.5dB / 伴奏 +0.9dB
-        # 人声从"骑在伴奏上"回到"坐在音乐里"
-        mix = vocal_st * 0.85 + accomp[:n] * 1.0
+        # 人声/伴奏平衡：vocal×0.80 + accomp×1.0（净 -1.9dB）。
+        # 2026-11-15 定稿：M2 基线 0.85 被反馈"孤立"，收 0.5dB 做温和融合；
+        # 原 0.85×(链内0.90) 双重降电平 + 压缩糊 + Haas 虚三重叠加是"越改越差"根因。
+        mix = vocal_st * 0.80 + accomp[:n] * 1.0
         peak = float(np.abs(mix).max())
         if peak > 1.0:
             mix = mix * (0.95 / peak)
