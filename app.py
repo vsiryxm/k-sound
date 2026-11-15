@@ -4,8 +4,8 @@
 任务式接口：
   POST /jobs             上传 voice(本人干声) + song(歌曲)，创建翻唱任务
   GET  /jobs/{id}        查询任务阶段 / 状态 / 错误
-  GET  /jobs/{id}/result 下载成品（?fmt=mp3|wav）
-  GET  /jobs/{id}/audio/{kind}  对比试听（cover|song|voice，切换对比用）
+  GET  /jobs/{id}/result 下载成品（?fmt=mp3|wav，?kind=mix|vocal|bg 分轨下载）
+  GET  /jobs/{id}/audio/{kind}  对比试听（cover|song|voice|vocal|bg，切换对比用）
   GET  /history          翻唱历史列表（SQLite k-sound.db，含速度/内存统计）
   GET|POST /api/config   生成设置（质量/音高，默认全本地模型）
   GET  /                 前端单页
@@ -16,6 +16,9 @@
   3) engine/infer_svc.py SEED-VC 换音色（singing checkpoint，解析 [chunk] 块进度）
   4) 回混：人声(单声道 float32，勿再除 32768)复制双声道×1.0 + 伴奏×0.9，
      峰值>1 整体归一到 0.95 → 44.1kHz/16bit wav → 192k mp3，成品带 _AI 后缀
+     分轨导出（对标竞品 bg/ai 双轨）：ai.wav=处理后的 AI 人声、bg.wav=Demucs 伴奏，
+     可下载后导入 DAW/声卡效果链做深度后期
+     方波质检（对标竞品 astats 质检）：converted/mix 双检，命中只标记不拦截
 
 关键坑（沿用 M1 结论）：
   - HF 子进程必须带 HF_ENDPOINT=https://hf-mirror.com + HF_HUB_DISABLE_XET=1
@@ -40,6 +43,8 @@ import soundfile as sf
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pedalboard import Compressor, HighpassFilter, Pedalboard, Reverb
+
+from engine.qc_square import detect_square_wave
 
 ROOT = Path(__file__).resolve().parent
 JOBS_DIR = ROOT / "jobs"
@@ -395,6 +400,15 @@ def _volume_db(path: Path) -> float | None:
         return None
 
 
+def _qc_check(path) -> dict | None:
+    """方波质检；任何异常都按"未检出"处理，绝不影响主流程。
+    返回 None（正常）或 {"start_sec": 起始秒}。"""
+    try:
+        return detect_square_wave(path)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------- 工作线程
 
 def _worker() -> None:
@@ -583,9 +597,23 @@ def _run_job(job) -> None:
             mix = mix * (0.95 / peak)
         mix_wav = job_dir / "mix.wav"
         sf.write(str(mix_wav), mix, 44100, subtype="PCM_16")
+        # 分轨导出（对标竞品 bg/ai 双轨）：ai=处理后的 AI 人声、bg=Demucs 伴奏。
+        # 峰值>1 时同样归一到 0.95，避免 PCM_16 写入时削波；分轨供 DAW/声卡链后期。
+        ai_wav = job_dir / "ai.wav"
+        bg_wav = job_dir / "bg.wav"
+        for arr, path in ((vocal_st, ai_wav), (accomp[:n], bg_wav)):
+            p = float(np.abs(arr).max())
+            if p > 1.0:
+                arr = arr * (0.95 / p)
+            sf.write(str(path), arr, 44100, subtype="PCM_16")
     except Exception as exc:
         _fail(job, "混音失败", str(exc))
         return
+
+    # 方波质检（对标竞品 astats 质检思路）：转换源 + 成品双检，命中只标记不拦截
+    qc_converted = _qc_check(converted_wav)
+    qc_mix = _qc_check(mix_wav)
+    qc_hit = qc_mix or qc_converted   # 优先报成品（用户直接听到的那条）
 
     stem = _safe_stem(job["song_name"])
     mp3_path = job_dir / f"{stem}_AI.mp3"
@@ -614,15 +642,25 @@ def _run_job(job) -> None:
         "svc_rtf": perf.get("svc_rtf"),
         "diffusion_steps": steps,
         "reverb_wet": cfg["reverb_wet"],
+        "qc": {"converted": qc_converted, "mix": qc_mix},
     }
+    result = {
+        "filename": f"{stem}_AI.mp3",
+        "duration": round(duration, 1),
+        "size_bytes": mp3_path.stat().st_size,
+        "wav_size_bytes": mix_wav.stat().st_size,
+    }
+    if ai_wav.exists() and bg_wav.exists():
+        result["stems"] = {
+            "vocal": "ai.wav", "bg": "bg.wav",
+            "vocal_size_bytes": ai_wav.stat().st_size,
+            "bg_size_bytes": bg_wav.stat().st_size,
+        }
+    if qc_hit:
+        result["qc"] = qc_hit
     _set(job, status="done", stage=None, detail="", finished_at=_now(),
          stats=stats,
-         result={
-             "filename": f"{stem}_AI.mp3",
-             "duration": round(duration, 1),
-             "size_bytes": mp3_path.stat().st_size,
-             "wav_size_bytes": mix_wav.stat().st_size,
-         })
+         result=result)
     _db_upsert_job(job)
 
 
@@ -741,32 +779,44 @@ def get_job(job_id: str):
 
 
 @app.get("/jobs/{job_id}/result")
-def get_result(job_id: str, fmt: str = "mp3"):
+def get_result(job_id: str, fmt: str = "mp3", kind: str = "mix"):
+    """下载成品：kind=mix（默认，成品）| vocal（AI 人声分轨）| bg（伴奏分轨）。
+    分轨仅提供 WAV（无损，适合导入 DAW/声卡效果链）。"""
     job = _get_job(job_id)
     if job.get("status") != "done" or not job.get("result"):
         raise HTTPException(409, "任务尚未完成" if job.get("status") == "running" else "任务未成功完成，无法下载")
     fmt = (fmt or "mp3").lower()
+    kind = (kind or "mix").lower()
     if fmt not in ("mp3", "wav"):
         raise HTTPException(400, "fmt 仅支持 mp3 或 wav")
+    if kind not in ("mix", "vocal", "bg"):
+        raise HTTPException(400, "kind 仅支持 mix / vocal / bg")
     job_dir = Path(job["dir"])
     stem = _safe_stem(job["song_name"])
-    if fmt == "wav":
-        path = job_dir / "mix.wav"
-        media = "audio/wav"
+    if kind == "mix":
+        if fmt == "wav":
+            path, media, name = job_dir / "mix.wav", "audio/wav", "mix.wav"
+        else:
+            path, media, name = job_dir / f"{stem}_AI.mp3", "audio/mpeg", f"{stem}_AI.mp3"
     else:
-        path = job_dir / f"{stem}_AI.mp3"
-        media = "audio/mpeg"
+        if fmt != "wav":
+            raise HTTPException(400, "分轨仅提供 WAV（无损，适合导入 DAW）")
+        if kind == "vocal":
+            path, name = job_dir / "ai.wav", f"{stem}_AI人声.wav"
+        else:
+            path, name = job_dir / "bg.wav", f"{stem}_伴奏.wav"
+        media = "audio/wav"
     if not path.exists():
         raise HTTPException(404, "成品文件缺失，请重新生成")
-    return FileResponse(str(path), media_type=media, filename=path.name)
+    return FileResponse(str(path), media_type=media, filename=name)
 
 
 @app.get("/jobs/{job_id}/audio/{kind}")
 def get_audio(job_id: str, kind: str):
-    """对比试听：cover=翻唱 / song=原唱 / voice=本人干声（优先原始上传件，回退 wav）。"""
+    """对比试听：cover=翻唱 / song=原唱 / voice=本人干声 / vocal=AI 人声分轨 / bg=伴奏分轨。"""
     job = _get_job(job_id)
-    if kind not in ("cover", "song", "voice"):
-        raise HTTPException(400, "kind 仅支持 cover / song / voice")
+    if kind not in ("cover", "song", "voice", "vocal", "bg"):
+        raise HTTPException(400, "kind 仅支持 cover / song / voice / vocal / bg")
     if job.get("status") != "done":
         raise HTTPException(409, "任务尚未完成，暂无可试听音频")
     job_dir = Path(job["dir"])
@@ -779,6 +829,8 @@ def get_audio(job_id: str, kind: str):
                 or [job_dir / "voice.wav"],
         "song": [p for p in [ _upload_file(job_dir, "song") ] if p and p.suffix]
                 or [job_dir / "song.wav"],
+        "vocal": [job_dir / "ai.wav"],
+        "bg": [job_dir / "bg.wav"],
     }[kind]
     for p in candidates:
         if p.exists():
@@ -827,6 +879,8 @@ def history(offset: int = 0, limit: int = 10):
                 "cover": bool(fn) and (job_dir / fn).exists(),
                 "voice": (_upload_file(job_dir, "voice") is not None) or (job_dir / "voice.wav").exists(),
                 "song": (_upload_file(job_dir, "song") is not None) or (job_dir / "song.wav").exists(),
+                "vocal": (job_dir / "ai.wav").exists(),
+                "bg": (job_dir / "bg.wav").exists(),
             },
         })
     return {"items": items, "total": total, "offset": offset, "has_more": offset + len(items) < total}
