@@ -42,7 +42,7 @@ import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pedalboard import Compressor, HighpassFilter, Pedalboard, Reverb
+from pedalboard import Pedalboard, Reverb
 
 from engine.qc_square import detect_square_wave
 
@@ -428,31 +428,26 @@ def _worker() -> None:
 threading.Thread(target=_worker, daemon=True, name="ks-worker").start()
 
 
-def _process_vocal(vocal_st: np.ndarray, wet: float, gain: float = 1.0) -> np.ndarray:
-    """人声处理链（融合度优化 B 步，2026-11-15 修正版）：把 AI 人声"坐进"伴奏声场。
+def _process_vocal(vocal_st: np.ndarray, wet: float) -> np.ndarray:
+    """人声处理（2026-11-16 定稿：整体回归 M2 口径）——仅混响，无 HP/压缩/Haas。
 
-    链路：HP高通去泥 → 轻压缩控动态(+makeup 补偿) → 混响 → Haas 微展宽 → 增益
-    - wet=0 时跳过混响（其余链路保留）
-    - 压缩后按实测 RMS 差动态补 Gain，人声响度不因压缩而塌陷
-    - 人声/伴奏平衡由混音公式统一承担（vocal×1.0 + accomp×0.9 = -0.9dB），
-      链内不再叠 gain，避免双重降电平把人声埋进伴奏（原 0.90×0.85=-2.3dB 事故）
-    - pedalboard 全本地 DSP，处理耗时 <1 秒
+    三轮听感回归的完整教训（详见 docs/M2-report.md §14–§15）：
+    - 压缩：SEED-VC 已继承原唱录音室动态，再压净损 4.9dB 且咬字段占比 11.5%→6.6%（发糊）
+    - Haas：延迟信号与人声高频不相关，侧/中比 ~0.8，定位发虚
+    - HP90：男声基频 100–150Hz 被 1–2.5dB 削减，人声变薄（用户听感"不如之前的"）
+    - 电平：0.80 比 M2 的 0.85 低 0.5dB，叠加上述各项后人声存在感不足
+    用户听感口径：人声清晰居中优先于融合。融合度提升改走 C 步频谱匹配
+    （对齐 Demucs 原人声 EQ 口袋），不再用电平/滤波折衷。
+    wet=0 完全干声；建议 0.15–0.25。混响只加在人声上，伴奏自带录音室空间感。
     """
     x = vocal_st.astype(np.float32)
     if x.ndim == 1:
         x = np.stack([x, x], axis=1)
-    # HP高通 → 混响。2026-11-15 定稿：移除压缩段（实测净损失 4.9dB 且频谱重心
-    # 下移、中频占比 11.5%→6.6%，咬字发糊；SEED-VC 输出已继承原唱录音室动态，
-    # 无需再压缩），保留 HP90（低频让位给编曲贝斯/鼓，人声"坐进"声场）。
-    hp = Pedalboard([HighpassFilter(cutoff_frequency_hz=90)])
-    out = hp(x, 44100)
-    if wet > 0:
-        out = Pedalboard([Reverb(room_size=0.35, damping=0.6, wet_level=wet,
-                                  dry_level=1.0, width=1.0, freeze_mode=0.0)])(out, 44100)
-    # 2026-11-15 移除 Haas 延迟展宽：实测 6ms/3ms 对宽带人声侧/中比均 ~0.8
-    # （延迟信号与原信号高频不相关，缩短延迟无效），人声定位发虚；
-    # 融合感由混响空间感 + 电平平衡承担，人声恢复居中（M2 基线 0.25 侧/中比）。
-    return out * gain
+    if wet <= 0:
+        return x
+    board = Pedalboard([Reverb(room_size=0.35, damping=0.6, wet_level=wet,
+                               dry_level=1.0, width=1.0, freeze_mode=0.0)])
+    return board(x, 44100)
 
 
 def _upload_file(job_dir: Path, kind: str) -> Path | None:
@@ -588,10 +583,10 @@ def _run_job(job) -> None:
         n = min(len(vocal), len(accomp))
         vocal_st = np.stack([vocal[:n], vocal[:n]], axis=1)
         vocal_st = _process_vocal(vocal_st, cfg["reverb_wet"])
-        # 人声/伴奏平衡：vocal×0.80 + accomp×1.0（净 -1.9dB）。
-        # 2026-11-15 定稿：M2 基线 0.85 被反馈"孤立"，收 0.5dB 做温和融合；
-        # 原 0.85×(链内0.90) 双重降电平 + 压缩糊 + Haas 虚三重叠加是"越改越差"根因。
-        mix = vocal_st * 0.80 + accomp[:n] * 1.0
+        # 人声/伴奏平衡（2026-11-16 定稿）：回归 M2 基线 vocal×0.85 + accomp×1.0。
+        # 用户听感口径：人声清晰居中优先于融合；昨晚 0.80+HP90 实测"人声不如之前的"。
+        # 融合度提升改走 C 步频谱匹配，不再动电平。
+        mix = vocal_st * 0.85 + accomp[:n] * 1.0
         peak = float(np.abs(mix).max())
         if peak > 1.0:
             mix = mix * (0.95 / peak)

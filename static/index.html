@@ -208,6 +208,8 @@
     background:rgba(139,92,246,.15);color:#C4B5FD;border:1px solid rgba(139,92,246,.3)}
   .bdate{font-size:12px;color:var(--muted2);margin-left:auto;flex:none;font-variant-numeric:tabular-nums}
   .bsub{font-size:12px;color:var(--muted2);margin-bottom:10px}
+  .bidline{font-size:11px;color:var(--muted2);margin:-6px 0 10px;letter-spacing:.2px}
+  .bid{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;user-select:all;color:var(--muted)}
   .bsub .bn{color:var(--muted);font-variant-numeric:tabular-nums}
   .bsrcs{display:flex;gap:8px;margin:10px 0 8px;flex-wrap:wrap}
   .bsrc{display:inline-flex;align-items:center;gap:8px;padding:7px 15px;border-radius:99px;
@@ -908,6 +910,7 @@ function renderHistory(items, reset){
         <span class="bdate">${fmtDate(it.created_at)}</span>
       </div>
       <div class="bsub">干声：${esc(it.voice_name || "-")}${gone ? ' · <span style="color:var(--muted2)">成品文件已清理</span>' : ""}</div>
+      <div class="bidline">批次 ID <span class="bid" title="点击选中整段ID，可复制">${it.job_id}</span></div>
       ${chipHtml}
       <div class="bsrcs">${srcBtn("cover")}${srcBtn("song")}${srcBtn("voice")}${srcBtn("vocal")}${srcBtn("bg")}</div>
       <audio preload="metadata" controls></audio>
