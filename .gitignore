@@ -25,3 +25,7 @@ k-sound.db-wal
 # 个人资料与竞品（不入库）
 竞品/
 *.exe
+
+# 内部调优报告（含个人称呼，本地保留不入库）
+docs/M2-report.md
+docs/full-song-e2e.md

@@ -97,7 +97,7 @@ export HF_ENDPOINT=https://huggingface.co
 - 前端：单文件 `static/index.html`，无构建依赖
 - 质检：方波伪影检测（引擎输出异常只标记不拦截）
 
-更详细的设计与调优记录见 `docs/`（PRD、里程碑报告、端到端验证）。
+产品需求与里程碑报告见 `docs/`。
 
 ## 致谢与许可
 

@@ -74,8 +74,9 @@
 ## 参考文档（先读这些再动手）
 - `docs/PRD.md`（完整需求）
 - `docs/M1-report.md`（M1 验证指标）
-- `docs/full-song-e2e.md`（完整歌端到端 + 本次修复记录）
 - `engine/infer_svc.py`（核心推理，直接复用其逻辑）
 
 ## 交付要求
 M2 完成后：用户能在本机浏览器打开 localhost，上传干声 + 歌 → 点开始 → 看到分步进度 → 最后试听 + 下载成品。
+
+> AI生成
