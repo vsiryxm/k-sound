@@ -1,0 +1,20 @@
+# k-sound · 已验证的依赖锁定（Python 3.11，Apple Silicon MPS 实测）
+# 装法：uv pip install -r requirements.txt（或 pip install -r requirements.txt）
+# Linux/NVIDIA 显卡：先按 https://pytorch.org 换装 cu121 版 torch/torchaudio，其余不变
+torch==2.4.0
+torchaudio==2.4.0
+numpy==1.26.4
+scipy==1.13.1
+librosa==0.10.2
+soundfile==0.12.1
+transformers==4.46.3
+huggingface-hub>=0.28.1
+demucs==4.1.0
+pedalboard==0.9.26
+fastapi==0.162.7
+uvicorn==0.54.0
+python-multipart==0.0.33
+pydantic==2.14.3
+munch==4.0.0
+einops==0.8.0
+pyyaml==6.0.3
